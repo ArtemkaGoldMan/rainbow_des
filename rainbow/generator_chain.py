@@ -6,15 +6,17 @@ from .reduction import reduce_hash
 def des_hash(password: str) -> bytes:
     """
     Funkcja tworząca 64-bitowy hash z hasła przy użyciu algorytmu DES (ECB).
-    Uwaga: używamy hasła jako klucza i szyfrujemy pusty blok.
-    To uproszczona forma funkcji haszującej.
+    Uwaga: używamy stałego klucza i szyfrujemy hasło.
     """
-    # Hasło musi mieć dokładnie 8 bajtów – dopełniamy zerami jeśli trzeba
-    key = password.ljust(8, '\x00')[:8].encode('utf-8')
+    # Stały klucz 8 bajtów
+    key = b'RAINBOW1'
     cipher = DES.new(key, DES.MODE_ECB)
 
-    # Szyfrujemy pusty blok (8 bajtów zer) – wynik traktujemy jako hash
-    return cipher.encrypt(b'\x00' * 8)
+    # Dopełniamy hasło do 8 bajtów
+    padded_password = password.ljust(8, '\x00')[:8].encode('utf-8')
+    
+    # Szyfrujemy hasło
+    return cipher.encrypt(padded_password)
 
 def generate_chain(start_pwd: str, pwd_length: int, chain_length: int) -> tuple[str, str]:
     """
