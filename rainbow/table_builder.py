@@ -15,9 +15,15 @@ def _worker_chain(args: Tuple[str, int, int]) -> Tuple[str, str]:
     Przyjmuje argumenty jako krotkę i zwraca (start_pwd, end_pwd).
     """
     start_pwd, pwd_length, chain_length = args
-    if not validate_password_length(start_pwd, pwd_length):
-        raise ValueError(f"Nieprawidłowe hasło startowe: {start_pwd}")
-    return generate_chain(start_pwd, pwd_length, chain_length)
+    try:
+        if not validate_password_length(start_pwd, pwd_length):
+            raise ValueError(f"Nieprawidłowe hasło startowe: {start_pwd}")
+        result = generate_chain(start_pwd, pwd_length, chain_length)
+        logger.debug(f"[worker] {start_pwd} → {result[1]}")
+        return result
+    except Exception as e:
+        logger.exception(f"Błąd podczas generowania łańcucha dla '{start_pwd}': {e}")
+        raise
 
 def generate_table(
     start_passwords: List[str],
@@ -39,33 +45,40 @@ def generate_table(
     Zwraca:
     - iterator krotek (start_pwd, end_pwd)
     """
-    if not start_passwords:
-        raise ValueError("Lista haseł startowych jest pusta")
+    try:
+        if not start_passwords:
+            raise ValueError("Lista haseł startowych jest pusta")
 
-    if not all(validate_password_length(pwd, pwd_length) for pwd in start_passwords):
-        raise ValueError("Niektóre hasła startowe mają nieprawidłową długość lub zawierają niedozwolone znaki")
+        if not all(validate_password_length(pwd, pwd_length) for pwd in start_passwords):
+            raise ValueError("Niektóre hasła startowe mają nieprawidłową długość lub zawierają niedozwolone znaki")
 
-    logger.info(f"Rozpoczynam generowanie tablicy tęczowej:")
-    logger.info(f"- Liczba haseł: {len(start_passwords)}")
-    logger.info(f"- Długość hasła: {pwd_length}")
-    logger.info(f"- Długość łańcucha: {chain_length}")
-    logger.info(f"- Liczba procesów: {num_procs}")
-    logger.info(f"- Rozmiar wsadu: {batch_size}")
+        logger.info(f"Rozpoczynam generowanie tablicy tęczowej:")
+        logger.info(f"- Liczba haseł: {len(start_passwords)}")
+        logger.info(f"- Długość hasła: {pwd_length}")
+        logger.info(f"- Długość łańcucha: {chain_length}")
+        logger.info(f"- Liczba procesów: {num_procs}")
+        logger.info(f"- Rozmiar wsadu: {batch_size}")
 
-    # Przygotowanie argumentów dla procesów
-    args = [(pwd, pwd_length, chain_length) for pwd in start_passwords]
+        args = [(pwd, pwd_length, chain_length) for pwd in start_passwords]
 
-    # Przetwarzanie wsadowe z paskiem postępu
-    with multiprocessing.Pool(processes=num_procs) as pool:
-        with tqdm(total=len(start_passwords), desc="Generowanie łańcuchów") as pbar:
-            for i in range(0, len(args), batch_size):
-                batch_args = args[i:i + batch_size]
-                batch_results = pool.map(_worker_chain, batch_args)
-                
-                for result in batch_results:
-                    yield result
-                
-                pbar.update(len(batch_args))
-                logger.info(f"Przetworzono {min(i + batch_size, len(start_passwords))}/{len(start_passwords)} łańcuchów")
+        with multiprocessing.Pool(processes=num_procs) as pool:
+            with tqdm(total=len(start_passwords), desc="Generowanie łańcuchów") as pbar:
+                for i in range(0, len(args), batch_size):
+                    batch_args = args[i:i + batch_size]
 
-    logger.info("Zakończono generowanie tablicy tęczowej")
+                    try:
+                        batch_results = pool.map(_worker_chain, batch_args)
+                        for result in batch_results:
+                            yield result
+                    except Exception as e:
+                        logger.error(f"Błąd w przetwarzaniu wsadu {i}-{i + batch_size}: {e}")
+                        raise
+
+                    pbar.update(len(batch_args))
+                    logger.debug(f"Przetworzono {min(i + batch_size, len(start_passwords))}/{len(start_passwords)} łańcuchów")
+
+        logger.info("Zakończono generowanie tablicy tęczowej")
+
+    except Exception as e:
+        logger.exception(f"❌ Nie udało się wygenerować tablicy: {e}")
+        raise

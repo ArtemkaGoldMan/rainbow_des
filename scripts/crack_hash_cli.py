@@ -47,49 +47,55 @@ def parse_args():
 
 def main():
     args = parse_args()
-    
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
     try:
-        # Konwertuj hash z hex na bajty
+        import re
+        if len(args.hash) != 16 or not re.fullmatch(r"[0-9a-fA-F]{16}", args.hash):
+            raise ValueError("Hash musi składać się z dokładnie 16 znaków hex (0-9, a-f)")
+
         try:
             target_hash = bytes.fromhex(args.hash)
-            if len(target_hash) != 8:
-                raise ValueError("Hash musi mieć dokładnie 8 bajtów (16 znaków hex)")
         except ValueError as e:
             logger.error(f"Nieprawidłowy format hasha: {e}")
             sys.exit(1)
-        
-        # Sprawdź czy plik z tablicą istnieje
+
         if not os.path.exists(args.table):
             logger.error(f"Plik z tablicą tęczową nie istnieje: {args.table}")
             sys.exit(1)
-        
+
+        if os.path.getsize(args.table) < 32:
+            logger.warning("Plik tablicy wygląda na bardzo mały – możliwe, że jest niekompletny")
+
         logger.info(f"Próba złamania hasha: {args.hash}")
         logger.info(f"Używam tablicy tęczowej: {args.table}")
-        
-        # Próbuj złamać hash
+
         password = crack_hash(
             target_hash=target_hash,
             rainbow_table_file=args.table,
             pwd_length=args.length,
             chain_length=args.chain
         )
-        
+
         if password:
             logger.info(f"✅ Znaleziono hasło: {password}")
-            # Weryfikacja
             if des_hash(password) == target_hash:
                 logger.info("✅ Weryfikacja hasła pomyślna")
             else:
                 logger.error("❌ Błąd weryfikacji hasła!")
         else:
             logger.error("❌ Nie znaleziono hasła")
-        
+
     except KeyboardInterrupt:
-        logger.error("Przerwano przez użytkownika")
+        logger.error("❌ Przerwano przez użytkownika")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Wystąpił błąd: {e}")
+        logger.exception(f"❌ Wystąpił błąd krytyczny: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    main() 
