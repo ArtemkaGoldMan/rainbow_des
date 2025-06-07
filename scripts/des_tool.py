@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# rainbow_des/scripts/des_tool.py
 
 import argparse
 import sys
@@ -84,7 +84,7 @@ def generate_command(args):
         logger.info(f"Zapisuję tablicę tęczową do {output_path}")
         save_table_to_csv(table, output_path, batch_size=10000)
 
-        logger.info("✅ Zakończono generowanie tablicy tęczowej")
+        logger.info("Zakończono generowanie tablicy tęczowej")
         logger.info(f"Parametry tablicy:")
         logger.info(f"- Długość hasła: {args.length}")
         logger.info(f"- Długość łańcucha: {args.chain_length}")
@@ -126,13 +126,13 @@ def crack_command(args):
         )
 
         if password:
-            logger.info(f"✅ Znaleziono hasło: {password}")
+            logger.info(f"Znaleziono hasło: {password}")
             if des_hash(password) == target_hash:
-                logger.info("✅ Weryfikacja hasła pomyślna")
+                logger.info("Weryfikacja hasła pomyślna")
             else:
-                logger.error("❌ Błąd weryfikacji hasła!")
+                logger.error("Błąd weryfikacji hasła!")
         else:
-            logger.error("❌ Nie znaleziono hasła")
+            logger.error("Nie znaleziono hasła")
 
     except KeyboardInterrupt:
         logger.error("Przerwano przez użytkownika")

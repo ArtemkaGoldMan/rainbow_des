@@ -80,5 +80,5 @@ def generate_table(
         logger.info("Zakończono generowanie tablicy tęczowej")
 
     except Exception as e:
-        logger.exception(f"❌ Nie udało się wygenerować tablicy: {e}")
+        logger.exception(f"Nie udało się wygenerować tablicy: {e}")
         raise

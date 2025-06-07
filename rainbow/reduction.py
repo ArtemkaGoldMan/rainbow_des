@@ -4,7 +4,7 @@ import string
 import logging
 from typing import List
 
-# Konfiguracja logowania (можеш винести в окремий файл при потребі)
+# Konfiguracja logowania
 logger = logging.getLogger(__name__)
 
 # Domyślny alfabet: małe litery + cyfry (36 znaków)

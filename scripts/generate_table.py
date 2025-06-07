@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# rainbow_des/scripts/generate_table.py
 
 import argparse
 import sys
@@ -107,13 +107,13 @@ def main():
 
         logger.info(f"Zapisuję tablicę tęczową do {output_path}")
         save_table_to_csv(table, output_path, batch_size=args.batch_size)
-        logger.info("✅ Zakończono generowanie tablicy tęczowej")
+        logger.info("Zakończono generowanie tablicy tęczowej")
 
     except KeyboardInterrupt:
-        logger.error("❌ Przerwano przez użytkownika")
+        logger.error("Przerwano przez użytkownika")
         sys.exit(1)
     except Exception as e:
-        logger.exception(f"❌ Wystąpił błąd krytyczny: {e}")
+        logger.exception(f"Wystąpił błąd krytyczny: {e}")
         sys.exit(1)
 
     args = parse_args()
@@ -141,7 +141,7 @@ def main():
         logger.info(f"Zapisuję tablicę tęczową do {output_path}")
         save_table_to_csv(table, output_path, batch_size=args.batch_size)
         
-        logger.info("✅ Zakończono generowanie tablicy tęczowej")
+        logger.info("Zakończono generowanie tablicy tęczowej")
         
     except KeyboardInterrupt:
         logger.error("Przerwano przez użytkownika")

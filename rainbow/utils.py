@@ -7,7 +7,7 @@ import logging
 from typing import List, Tuple, Iterator
 from pathlib import Path
 
-# Configure logging (може бути викликане лише раз у головному файлі)
+# Configure logging
 logger = logging.getLogger(__name__)
 
 def save_table_to_csv(table: Iterator[Tuple[str, str]], output_file: str, batch_size: int = 1000) -> None:
@@ -44,7 +44,7 @@ def save_table_to_csv(table: Iterator[Tuple[str, str]], output_file: str, batch_
                 logger.info(f"Zapisano {count} łańcuchów (ostatnia partia)")
 
     except Exception as e:
-        logger.exception(f"❌ Błąd podczas zapisu tablicy do pliku CSV: {e}")
+        logger.exception(f"Błąd podczas zapisu tablicy do pliku CSV: {e}")
         raise
 
 def load_table_from_csv(input_file: str) -> Iterator[Tuple[str, str]]:
@@ -63,7 +63,7 @@ def load_table_from_csv(input_file: str) -> Iterator[Tuple[str, str]]:
         logger.error(f"Plik {input_file} nie został znaleziony.")
         raise
     except Exception as e:
-        logger.exception(f"❌ Błąd podczas wczytywania tablicy z pliku: {e}")
+        logger.exception(f"Błąd podczas wczytywania tablicy z pliku: {e}")
         raise
 
 def validate_password_length(password: str, expected_length: int) -> bool:

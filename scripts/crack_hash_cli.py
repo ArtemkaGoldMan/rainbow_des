@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# rainbow_des/scripts/crack_hash_cli.py
 
 import argparse
 import sys
@@ -82,19 +82,19 @@ def main():
         )
 
         if password:
-            logger.info(f"✅ Znaleziono hasło: {password}")
+            logger.info(f"Znaleziono hasło: {password}")
             if des_hash(password) == target_hash:
-                logger.info("✅ Weryfikacja hasła pomyślna")
+                logger.info("Weryfikacja hasła pomyślna")
             else:
-                logger.error("❌ Błąd weryfikacji hasła!")
+                logger.error("Błąd weryfikacji hasła!")
         else:
-            logger.error("❌ Nie znaleziono hasła")
+            logger.error("Nie znaleziono hasła")
 
     except KeyboardInterrupt:
-        logger.error("❌ Przerwano przez użytkownika")
+        logger.error("Przerwano przez użytkownika")
         sys.exit(1)
     except Exception as e:
-        logger.exception(f"❌ Wystąpił błąd krytyczny: {e}")
+        logger.exception(f"Wystąpił błąd krytyczny: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

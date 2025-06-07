@@ -12,8 +12,6 @@ def des_hash(password: str) -> bytes:
     Uwaga: używamy stałego klucza i szyfrujemy hasło.
     """
     try:
-        if not isinstance(password, str):
-            raise TypeError("Password must be a string.")
         if len(password) == 0:
             raise ValueError("Password cannot be empty.")
 
@@ -36,8 +34,6 @@ def generate_chain(start_pwd: str, pwd_length: int, chain_length: int) -> tuple[
     start_pwd → hash → reduce → hash → ... → end_pwd
     """
     try:
-        if not isinstance(start_pwd, str):
-            raise TypeError("Start password must be a string.")
         if len(start_pwd) > pwd_length:
             raise ValueError(f"Start password '{start_pwd}' exceeds expected length {pwd_length}.")
         if pwd_length <= 0 or chain_length <= 0:
