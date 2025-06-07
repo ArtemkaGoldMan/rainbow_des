@@ -1,3 +1,5 @@
+# rainbow_des/rainbow/generator_chain.py
+
 from Crypto.Cipher import DES
 from .reduction import reduce_hash
 

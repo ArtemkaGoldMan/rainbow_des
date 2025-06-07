@@ -1,3 +1,5 @@
+#rainbow_des/rainbow/reduction.py
+
 import string
 
 # Domyślny alfabet: małe litery + cyfry (36 znaków)
