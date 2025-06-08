@@ -1,58 +1,81 @@
 #rainbow_des/rainbow/reduction.py
 
-import string
+"""
+Moduł implementujący funkcje redukcji dla tablic tęczowych.
+"""
+
 import logging
-from typing import List
+import logging.handlers
+import os
+import time
+from typing import Optional
+from .config import (
+    PASSWORD_ALPHABET,
+    DES_BLOCK_SIZE,
+    MIN_PASSWORD_LENGTH,
+    MAX_PASSWORD_LENGTH,
+    Password,
+    Hash,
+    LOG_FORMAT,
+    LOG_LEVEL,
+    LOG_FILE,
+    MAX_LOG_SIZE,
+    MAX_LOG_FILES
+)
 
-# Konfiguracja logowania
+# Konfiguracja logowania z rotacją
+handler = logging.handlers.RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=MAX_LOG_SIZE,
+    backupCount=MAX_LOG_FILES
+)
+handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
 logger = logging.getLogger(__name__)
+logger.setLevel(LOG_LEVEL)
+logger.addHandler(handler)
 
-# Domyślny alfabet: małe litery + cyfry (36 znaków)
-DEFAULT_ALPHABET = string.ascii_lowercase + string.digits
-ALPHA_LEN = len(DEFAULT_ALPHABET)
-
-def reduce_hash(hash_bytes: bytes, round_index: int, pwd_length: int, alphabet: str = DEFAULT_ALPHABET) -> str:
+def reduce_hash(hash_bytes: Hash, step: int, pwd_length: int) -> Password:
     """
-    Funkcja redukcji odwzorowuje hash na hasło, wykorzystując określony alfabet.
-    Zależność od numeru kroku pozwala uniknąć cykli i powtórzeń.
-
-    Argumenty:
-    - hash_bytes: wynik funkcji hashującej w postaci bajtów (8 bajtów z DES)
-    - round_index: numer kroku w łańcuchu (ważne do unikania cykli)
-    - pwd_length: docelowa długość hasła (np. 6 znaków)
-    - alphabet: dozwolony alfabet znaków (domyślnie litery + cyfry)
-
-    Zwraca:
-    - hasło jako ciąg znaków z alfabetu o zadanej długości
+    Redukuje hash do hasła o określonej długości.
+    Używa kroku jako dodatkowego parametru dla różnorodności.
+    
+    Args:
+        hash_bytes: Hash do zredukowania
+        step: Numer kroku w łańcuchu
+        pwd_length: Oczekiwana długość hasła
+        
+    Returns:
+        Wygenerowane hasło
+        
+    Raises:
+        ValueError: Jeśli parametry są nieprawidłowe
+        Exception: Dla innych błędów przetwarzania
     """
     try:
         if not isinstance(hash_bytes, bytes):
-            raise TypeError("Expected hash_bytes to be bytes.")
-        if len(hash_bytes) != 8:
-            raise ValueError("Expected 8-byte input from DES.")
-        if not isinstance(round_index, int) or round_index < 0:
-            raise ValueError("round_index must be a non-negative integer.")
-        if not isinstance(pwd_length, int) or pwd_length <= 0:
-            raise ValueError("pwd_length must be a positive integer.")
-        if not isinstance(alphabet, str) or len(alphabet) < 2:
-            raise ValueError("alphabet must be a string with at least 2 characters.")
-
-        # Konwertuj bajty na liczbę całkowitą
-        num = int.from_bytes(hash_bytes, byteorder='big')
-
-        # Dodaj round_index, zachowaj 64 bity
-        num = (num + round_index) & 0xFFFFFFFFFFFFFFFF
-
-        # Konwertuj na hasło w systemie o podstawie ALPHA_LEN
-        result: List[str] = []
+            raise TypeError("Hash musi być bajtami")
+            
+        if not isinstance(step, int) or step < 0:
+            raise ValueError("Krok musi być nieujemną liczbą całkowitą")
+            
+        if pwd_length < MIN_PASSWORD_LENGTH or pwd_length > MAX_PASSWORD_LENGTH:
+            raise ValueError(f"Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
+            
+        # Konwersja hasha na liczbę
+        hash_int = int.from_bytes(hash_bytes, byteorder='big')
+        
+        # Dodanie kroku dla różnorodności
+        hash_int = (hash_int + step) % (1 << 64)
+        
+        # Generowanie hasła
+        result = []
         for _ in range(pwd_length):
-            num, idx = divmod(num, len(alphabet))
-            result.append(alphabet[idx])
-
-        password = ''.join(reversed(result))
-        logger.debug(f"[reduce_hash] round={round_index}, hash={hash_bytes.hex()} → '{password}'")
-        return password
-
+            hash_int, remainder = divmod(hash_int, len(PASSWORD_ALPHABET))
+            result.append(PASSWORD_ALPHABET[remainder])
+            
+        return ''.join(result)
+        
     except Exception as e:
-        logger.exception(f"[reduce_hash] Error during reduction: {e}")
+        logger.exception(f"Błąd podczas redukcji hasha: {e}")
         raise

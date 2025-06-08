@@ -1,54 +1,119 @@
 # rainbow_des/rainbow/generator_chain.py
 
+"""
+Moduł do generowania łańcuchów tęczowych i funkcji redukcji.
+"""
+
 import logging
+import logging.handlers
+import os
+import time
+from typing import Tuple, Optional
 from Crypto.Cipher import DES
+from Crypto.Util.Padding import pad
 from .reduction import reduce_hash
+from .config import (
+    DES_KEY,
+    DES_BLOCK_SIZE,
+    MIN_PASSWORD_LENGTH,
+    MAX_PASSWORD_LENGTH,
+    Password,
+    Hash,
+    Chain,
+    LOG_FORMAT,
+    LOG_LEVEL,
+    LOG_FILE,
+    MAX_LOG_SIZE,
+    MAX_LOG_FILES
+)
+
+# Konfiguracja logowania z rotacją
+handler = logging.handlers.RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=MAX_LOG_SIZE,
+    backupCount=MAX_LOG_FILES
+)
+handler.setFormatter(logging.Formatter(LOG_FORMAT))
 
 logger = logging.getLogger(__name__)
+logger.setLevel(LOG_LEVEL)
+logger.addHandler(handler)
 
-def des_hash(password: str) -> bytes:
+def des_hash(password: Password) -> Hash:
     """
-    Funkcja tworząca 64-bitowy hash z hasła przy użyciu algorytmu DES (ECB).
-    Uwaga: używamy stałego klucza i szyfrujemy hasło.
+    Generuje hash DES dla podanego hasła.
+    
+    Args:
+        password: Hasło do zahashowania
+        
+    Returns:
+        Hash DES jako bajty
+        
+    Raises:
+        ValueError: Jeśli hasło jest nieprawidłowe
+        Exception: Dla innych błędów przetwarzania
     """
     try:
-        if len(password) == 0:
-            raise ValueError("Password cannot be empty.")
-
-        key = b'RAINBOW1'
-        cipher = DES.new(key, DES.MODE_ECB)
-        padded_password = password.ljust(8, '\x00')[:8].encode('utf-8')
-
-        result = cipher.encrypt(padded_password)
-        logger.debug(f"[des_hash] password='{password}' → hash={result.hex()}")
-        return result
-
+        if not isinstance(password, str):
+            raise TypeError("Hasło musi być ciągiem znaków")
+            
+        if len(password) < MIN_PASSWORD_LENGTH or len(password) > MAX_PASSWORD_LENGTH:
+            raise ValueError(f"Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
+            
+        # Przygotowanie danych do szyfrowania
+        data = password.encode('utf-8')
+        padded_data = pad(data, DES_BLOCK_SIZE)
+        
+        # Inicjalizacja szyfru DES
+        cipher = DES.new(DES_KEY, DES.MODE_ECB)
+        
+        # Szyfrowanie
+        encrypted = cipher.encrypt(padded_data)
+        
+        # Zwracamy pierwszy blok jako hash
+        return encrypted[:DES_BLOCK_SIZE]
+        
     except Exception as e:
-        logger.exception(f"[des_hash] Error processing password '{password}': {e}")
+        logger.exception(f"Błąd podczas generowania hasha DES: {e}")
         raise
 
-
-def generate_chain(start_pwd: str, pwd_length: int, chain_length: int) -> tuple[str, str]:
+def generate_chain(start_password: Password, pwd_length: int, chain_length: int) -> Chain:
     """
-    Generuje jeden łańcuch tęczowy:
-    start_pwd → hash → reduce → hash → ... → end_pwd
+    Generuje łańcuch tęczowy zaczynając od podanego hasła.
+    
+    Args:
+        start_password: Hasło startowe
+        pwd_length: Długość hasła
+        chain_length: Długość łańcucha
+        
+    Returns:
+        Krotka (hasło_startowe, hasło_końcowe)
+        
+    Raises:
+        ValueError: Jeśli parametry są nieprawidłowe
+        Exception: Dla innych błędów przetwarzania
     """
     try:
-        if len(start_pwd) > pwd_length:
-            raise ValueError(f"Start password '{start_pwd}' exceeds expected length {pwd_length}.")
-        if pwd_length <= 0 or chain_length <= 0:
-            raise ValueError("Password and chain lengths must be greater than zero.")
-
-        pwd = start_pwd
-
+        if not isinstance(start_password, str):
+            raise TypeError("Hasło startowe musi być ciągiem znaków")
+            
+        if len(start_password) != pwd_length:
+            raise ValueError(f"Hasło startowe musi mieć długość {pwd_length}")
+            
+        if chain_length <= 0:
+            raise ValueError("Długość łańcucha musi być większa od 0")
+            
+        current_password = start_password
+        
         for i in range(chain_length):
-            h = des_hash(pwd)
-            pwd = reduce_hash(h, i, pwd_length)
-            logger.debug(f"[generate_chain] Step {i}: hash={h.hex()} → pwd='{pwd}'")
-
-        logger.info(f"[generate_chain] Chain: {start_pwd} → {pwd}")
-        return start_pwd, pwd
-
+            # Generowanie hasha
+            current_hash = des_hash(current_password)
+            
+            # Redukcja hasha do nowego hasła
+            current_password = reduce_hash(current_hash, i, pwd_length)
+            
+        return start_password, current_password
+        
     except Exception as e:
-        logger.exception(f"[generate_chain] Error generating chain from '{start_pwd}': {e}")
+        logger.exception(f"Błąd podczas generowania łańcucha tęczowego: {e}")
         raise
