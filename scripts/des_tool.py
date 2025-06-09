@@ -126,7 +126,7 @@ def generate_command(args):
             logger.error("Rozmiar wsadu musi być większy od 0")
             sys.exit(1)
 
-        print(f"\nRozpoczynam generowanie tablicy tęczowej:")
+        print("\nRozpoczynam generowanie tablicy tęczowej:")
         print(f"- Liczba łańcuchów: {args.chains}")
         print(f"- Długość hasła: {args.length}")
         print(f"- Długość łańcucha: {args.chain_length}")
@@ -161,6 +161,12 @@ def generate_command(args):
         print(f"Wygenerowano tablicę tęczową w {table_gen_time:.6f}s")
         logger.info(f"Wygenerowano tablicę tęczową w {table_gen_time:.6f}s")
         
+        # Obliczanie statystyk unikalności
+        total_chains = len(table)
+        unique_chains = len(set(end_pwd for _, end_pwd in table))
+        unique_percentage = (unique_chains / total_chains) * 100
+        
+        
         # Zapisywanie do pliku
         print(f"\nZapisywanie tablicy do pliku {args.output}...")
         logger.info(f"Zapisywanie tablicy do pliku {args.output}...")
@@ -170,7 +176,9 @@ def generate_command(args):
         
         # Wyświetlanie podsumowania
         print("\nPodsumowanie:")
-        print(f"- Liczba haseł: {len(passwords)}")
+        print(f"- Całkowita liczba łańcuchów: {total_chains}")
+        print(f"- Unikalnych łańcuchów: {unique_chains}")
+        print(f"- Procent unikalności: {unique_percentage:.2f}%")
         print(f"- Długość hasła: {args.length}")
         print(f"- Długość łańcucha: {args.chain_length}")
         print(f"- Liczba procesów: {args.procs}")
