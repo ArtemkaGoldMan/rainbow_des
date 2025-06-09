@@ -128,12 +128,13 @@ def load_table_from_csv(input_file: str) -> Table:
             reader = csv.DictReader(f)
             
             # Walidacja nagłówków
-            if not all(header in reader.fieldnames for header in CSV_HEADERS):
-                raise ValueError(f"Nieprawidłowe nagłówki CSV. Oczekiwano: {CSV_HEADERS}")
+            expected_headers = ['hasło_startowe', 'hasło_końcowe']
+            if not all(header in reader.fieldnames for header in expected_headers):
+                raise ValueError(f"Nieprawidłowe nagłówki CSV. Oczekiwano: {expected_headers}")
                 
             for row in reader:
-                if all(header in row for header in CSV_HEADERS):
-                    yield row['start_password'], row['end_password']
+                if all(header in row for header in expected_headers):
+                    yield row['hasło_startowe'], row['hasło_końcowe']
                 else:
                     logger.warning(f"Pominięto nieprawidłowy wiersz: {row}")
                     

@@ -1,14 +1,18 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from rainbow.generator_chain import des_hash
 from rainbow.reduction import reduce_hash
 
-def test_reduce_hash_basic():
-    # Przykładowy hash w postaci 8 bajtów (symulacja DES)
-    hash_bytes = b'\x01\x02\x03\x04\x05\x06\x07\x08'
+def test_uniqueness_of_reduction():
+    pwd_length = 8
+    seen = set()
+    for i in range(100_0000):
+        h = des_hash(f"x{i}")
+        p = reduce_hash(h, i, pwd_length)
+        seen.add(p)
+    unique_count = len(seen)
+    print(f"Unique passwords after {pwd_length} steps: {unique_count}")
+    assert unique_count > 90_000
 
-    # Dwa wywołania z różnymi round_index — powinny dać różne hasła
-    result1 = reduce_hash(hash_bytes, round_index=0, pwd_length=6)
-    result2 = reduce_hash(hash_bytes, round_index=1, pwd_length=6)
-
-    # Sprawdzenie, czy wynik jest poprawny
-    assert isinstance(result1, str)
-    assert len(result1) == 6
-    assert result1 != result2  # round_index powinien wpływać na wynik

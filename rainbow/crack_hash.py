@@ -1,5 +1,3 @@
-# rainbow_des/rainbow/crack_hash.py
-
 """
 Moduł do łamania hasł DES przy użyciu tablic tęczowych.
 """
@@ -8,10 +6,11 @@ import logging
 import logging.handlers
 import os
 import time
+import csv
 from typing import Optional
 from pathlib import Path
 
-from .generator_chain import des_hash, generate_chain
+from .generator_chain import des_hash
 from .reduction import reduce_hash
 from .utils import load_table_from_csv, validate_password_length
 from .config import (
@@ -64,7 +63,7 @@ def crack_hash(
     chain_length: int
 ) -> Optional[Password]:
     """
-    Próbuje złamać hash DES używając tablicy tęczowej.
+    Próbuje złamać hash DES używając tablicy tęczową.
     
     Args:
         target_hash: Hash do złamania
@@ -81,64 +80,71 @@ def crack_hash(
         Exception: Dla innych błędów przetwarzania
     """
     try:
-        # Walidacja parametrów
-        if not isinstance(target_hash, bytes):
-            raise TypeError("Hash musi być bajtami")
-            
-        if len(target_hash) != DES_BLOCK_SIZE:
-            raise ValueError(f"Hash musi mieć dokładnie {DES_BLOCK_SIZE} bajtów")
-            
-        if pwd_length < MIN_PASSWORD_LENGTH or pwd_length > MAX_PASSWORD_LENGTH:
+        start_time = time.time()
+
+        # Walidacja
+        if not isinstance(target_hash, bytes) or len(target_hash) != DES_BLOCK_SIZE:
+            raise ValueError(f"Hash musi być bajtami o długości {DES_BLOCK_SIZE}")
+
+        if not MIN_PASSWORD_LENGTH <= pwd_length <= MAX_PASSWORD_LENGTH:
             raise ValueError(f"Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
-            
+
         if chain_length <= 0:
             raise ValueError("Długość łańcucha musi być większa od 0")
-            
-        # Sprawdzenie pliku tablicy
+
         table_path = Path(rainbow_table_file)
         if not table_path.exists():
             raise FileNotFoundError(f"Nie znaleziono pliku tablicy: {rainbow_table_file}")
-            
-        # Wczytanie tablicy tęczowej
-        print(f"\nWczytywanie tablicy tęczowej z {rainbow_table_file}...")
-        logger.info(f"Wczytywanie tablicy tęczowej z {rainbow_table_file}")
-        table = dict(load_table_from_csv(rainbow_table_file))  # Convert to dict for faster lookups
-        total_chains = len(table)
-        print(f"Wczytano {total_chains} łańcuchów")
-        
-        # Próba znalezienia hasła
-        print(f"\nPróba złamania hasha: {target_hash.hex()}")
+
+        # Wczytywanie tablicy
+        table = {}
+        total_rows = 0
+        unique_endings = 0
+
+        with table_path.open('r', newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                total_rows += 1
+                end_pwd = row['hasło_końcowe']
+                if end_pwd not in table:
+                    table[end_pwd] = row['hasło_startowe']
+                    unique_endings += 1
+
+        print(f"Wczytano {total_rows} wierszy, {unique_endings} unikalnych łańcuchów")
+        logger.info(f"Wczytano {total_rows} wierszy, {unique_endings} unikalnych łańcuchów")
+
         logger.info(f"Próba złamania hasha: {target_hash.hex()}")
-        
-        # Try each possible chain position
+        print(f"Próba złamania hasha: {target_hash.hex()}")
+
+        crack_start = time.time()
+
         for step in range(chain_length - 1, -1, -1):
             current_hash = target_hash
-            
-            # Simulate reduction from step to end
+
             for i in range(step, chain_length):
                 pwd_candidate = reduce_hash(current_hash, i, pwd_length)
                 current_hash = des_hash(pwd_candidate)
-                
-            # Check if this end password is in the table
-            end_pwd = pwd_candidate
-            if end_pwd in table:
-                start_pwd = table[end_pwd]
-                print(f"Potencjalne dopasowanie łańcucha: {start_pwd} → {end_pwd}")
-                
-                # Reconstruct chain and verify hash
+
+            if pwd_candidate in table:
+                start_pwd = table[pwd_candidate]
                 test_pwd = start_pwd
+
                 for i in range(chain_length):
-                    hashed = des_hash(test_pwd)
-                    if hashed == target_hash:
-                        print(f"\nZnaleziono hasło: {test_pwd}")
-                        logger.info(f"Znaleziono hasło: {test_pwd}")
+                    if des_hash(test_pwd) == target_hash:
+                        duration = time.time() - crack_start
+                        logger.info(f"Znaleziono hasło: {test_pwd} w czasie {duration:.6f}s")
+                        print(f"Znaleziono hasło: {test_pwd}")
+                        print(f"Czas łamania: {duration:.6f}s")
                         return test_pwd
-                    test_pwd = reduce_hash(hashed, i, pwd_length)
-                    
-        print("\nNie znaleziono hasła")
-        logger.info("Nie znaleziono hasła")
+
+                    test_pwd = reduce_hash(des_hash(test_pwd), i, pwd_length)
+
+        duration = time.time() - crack_start
+        logger.info(f"Nie znaleziono hasła po {duration:.6f}s")
+        print("Nie znaleziono hasła")
+        print(f"Czas łamania: {duration:.6f}s")
         return None
-        
+
     except Exception as e:
         logger.exception(f"Błąd podczas łamania hasha: {e}")
         raise

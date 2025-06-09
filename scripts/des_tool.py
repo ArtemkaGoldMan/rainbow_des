@@ -144,8 +144,8 @@ def generate_command(args):
             args.length,
             args.seed
         )
-        print(f"Wygenerowano {len(passwords)} haseł w {pwd_gen_time:.2f}s")
-        logger.info(f"Wygenerowano {len(passwords)} haseł w {pwd_gen_time:.2f}s")
+        print(f"Wygenerowano {len(passwords)} haseł w {pwd_gen_time:.6f}s")
+        logger.info(f"Wygenerowano {len(passwords)} haseł w {pwd_gen_time:.6f}s")
         
         # Generowanie tablicy tęczowej
         print("\nGenerowanie tablicy tęczowej...")
@@ -158,15 +158,15 @@ def generate_command(args):
             args.seed,
             args.batch_size
         )
-        print(f"Wygenerowano tablicę tęczową w {table_gen_time:.2f}s")
-        logger.info(f"Wygenerowano tablicę tęczową w {table_gen_time:.2f}s")
+        print(f"Wygenerowano tablicę tęczową w {table_gen_time:.6f}s")
+        logger.info(f"Wygenerowano tablicę tęczową w {table_gen_time:.6f}s")
         
         # Zapisywanie do pliku
         print(f"\nZapisywanie tablicy do pliku {args.output}...")
         logger.info(f"Zapisywanie tablicy do pliku {args.output}...")
         save_time = save_table_to_csv(table, args.output)
-        print(f"Zapisano tablicę w {save_time:.2f}s")
-        logger.info(f"Zapisano tablicę w {save_time:.2f}s")
+        print(f"Zapisano tablicę w {save_time:.6f}s")
+        logger.info(f"Zapisano tablicę w {save_time:.6f}s")
         
         # Wyświetlanie podsumowania
         print("\nPodsumowanie:")
@@ -175,10 +175,10 @@ def generate_command(args):
         print(f"- Długość łańcucha: {args.chain_length}")
         print(f"- Liczba procesów: {args.procs}")
         print(f"- Rozmiar wsadu: {args.batch_size}")
-        print(f"- Czas generowania haseł: {pwd_gen_time:.2f}s")
-        print(f"- Czas generowania tablicy: {table_gen_time:.2f}s")
-        print(f"- Czas zapisu: {save_time:.2f}s")
-        print(f"- Całkowity czas: {pwd_gen_time + table_gen_time + save_time:.2f}s")
+        print(f"- Czas generowania haseł: {pwd_gen_time:.6f}s")
+        print(f"- Czas generowania tablicy: {table_gen_time:.6f}s")
+        print(f"- Czas zapisu: {save_time:.6f}s")
+        print(f"- Całkowity czas: {pwd_gen_time + table_gen_time + save_time:.6f}s")
         
     except KeyboardInterrupt:
         print("\nPrzerwano przez użytkownika")
