@@ -2,7 +2,7 @@
 Implementacja tablicy tęczowej do łamania haseł DES.
 """
 
-from .generator_chain import des_hash, generate_chain
+from .generator_chain import des_hash, generate_chain, generate_rainbow_table
 from .reduction import reduce_hash
 from .crack_hash import crack_hash
 from .utils import (
@@ -28,6 +28,7 @@ __all__ = [
     # Funkcje podstawowe
     'des_hash',
     'generate_chain',
+    'generate_rainbow_table',
     'reduce_hash',
     'crack_hash',
     

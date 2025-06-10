@@ -194,3 +194,9 @@ cython_debug/
 .cursorindexingignore
 
 rainbow_table.csv
+
+# Ignore all CSV files
+*.csv
+
+# Logs
+*.log
