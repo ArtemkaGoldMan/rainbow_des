@@ -22,7 +22,7 @@ DEFAULT_CHAIN_LENGTH: Final[int] = 1000
 DEFAULT_NUM_CHAINS: Final[int] = 1000000
 
 # Ustawienia puli procesów
-DEFAULT_TIMEOUT: Final[int] = 3600  # 1 godzina w sekundach
+DEFAULT_TIMEOUT: Final[int] = 300  # 5 minutes in seconds, reduced from 1 hour
 MIN_PROCESSES: Final[int] = 1
 MAX_PROCESSES: Final[int] = 16  # Rozsądny limit dla większości systemów
 
