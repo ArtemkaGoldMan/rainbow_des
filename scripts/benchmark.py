@@ -24,14 +24,16 @@ from rainbow import (
 from rainbow.table_builder import generate_table 
 
 # Test parameters
-PASSWORD_LENGTHS = [3] 
-CHAIN_LENGTHS = [50, 100]  
-NUM_CHAINS = [1000, 10000] 
-NUM_PROCESSES = [1, 2] 
-BATCH_SIZES = [100, 1000]  
+PASSWORD_LENGTHS = [6]
+CHAIN_LENGTHS = [150]
+NUM_CHAINS = [10_000_000]
+NUM_PROCESSES = [4, 8]
+BATCH_SIZES = [5000]
+
+
 
 # Directory for saving tables
-TABLES_DIR = "benchmark_tables"
+TABLES_DIR = "benchmark_tables6"
 
 def get_table_filename(params: Dict) -> str:
     """Generate a unique filename for a rainbow table based on its parameters."""
