@@ -16,15 +16,16 @@ from .generator_chain import generate_chain
 from .utils import validate_password_length
 from .config import (
     DEFAULT_BATCH_SIZE,
-    DEFAULT_TIMEOUT,
     MIN_PROCESSES,
     MAX_PROCESSES,
-    MAX_FILE_SIZE,
     MIN_PASSWORD_LENGTH,
     MAX_PASSWORD_LENGTH,
     Chain,
     Table
 )
+
+# Local constants
+DEFAULT_TIMEOUT = 3600  # 1 hour in seconds
 
 def validate_inputs(
     start_passwords: List[str],

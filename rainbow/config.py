@@ -9,7 +9,6 @@ import string
 # Password settings
 MIN_PASSWORD_LENGTH: Final[int] = 1
 MAX_PASSWORD_LENGTH: Final[int] = 8
-DEFAULT_PASSWORD_LENGTH: Final[int] = 3
 PASSWORD_ALPHABET: Final[str] = string.ascii_lowercase + string.digits
 
 # DES settings
@@ -22,13 +21,11 @@ DEFAULT_CHAIN_LENGTH: Final[int] = 1000
 DEFAULT_NUM_CHAINS: Final[int] = 1000000
 
 # Process pool settings
-DEFAULT_TIMEOUT: Final[int] = 3600  # 1 hour in seconds
 MIN_PROCESSES: Final[int] = 1
 MAX_PROCESSES: Final[int] = 16  # Reasonable limit for most systems
 
 # File settings
 CSV_HEADERS: Final[List[str]] = ['start_password', 'end_password']
-MAX_FILE_SIZE: Final[int] = 1024 * 1024 * 1024  # 1GB
 
 # Type definitions
 Password = str

@@ -10,32 +10,12 @@ from pathlib import Path
 
 from .generator_chain import des_hash
 from .reduction import reduce_hash
-from .utils import load_table_from_csv, validate_password_length
+from .utils import load_table_from_csv
 from .config import (
     DES_BLOCK_SIZE,
-    MIN_PASSWORD_LENGTH,
-    MAX_PASSWORD_LENGTH,
-    MAX_FILE_SIZE,
     Password,
     Hash
 )
-
-def validate_hash(hash_bytes: Hash) -> None:
-    """
-    Validates hash format and length.
-    
-    Args:
-        hash_bytes: Hash to validate
-        
-    Raises:
-        TypeError: If hash is not bytes
-        ValueError: If hash length is invalid
-    """
-    if not isinstance(hash_bytes, bytes):
-        raise TypeError("Hash must be bytes")
-        
-    if len(hash_bytes) != DES_BLOCK_SIZE:
-        raise ValueError(f"Hash must be exactly {DES_BLOCK_SIZE} bytes ({DES_BLOCK_SIZE * 8} bits)")
 
 def load_rainbow_table(rainbow_table_file: str) -> Tuple[Dict[str, str], int, int]:
     """
@@ -46,10 +26,6 @@ def load_rainbow_table(rainbow_table_file: str) -> Tuple[Dict[str, str], int, in
         
     Returns:
         Tuple (table dictionary, total rows, unique endings)
-        
-    Raises:
-        FileNotFoundError: If table file doesn't exist
-        Exception: For other processing errors
     """
     table_path = Path(rainbow_table_file)
     if not table_path.exists():
@@ -121,44 +97,23 @@ def crack_hash(
         
     Returns:
         Found password or None if not found
-        
-    Raises:
-        ValueError: If parameters are invalid
-        FileNotFoundError: If table file doesn't exist
-        Exception: For other processing errors
     """
-    try:
-        # Validation
-        if not isinstance(target_hash, bytes) or len(target_hash) != DES_BLOCK_SIZE:
-            raise ValueError(f"Hash must be bytes of length {DES_BLOCK_SIZE}")
+    # Load table
+    table, total_rows, unique_endings = load_rainbow_table(rainbow_table_file)
+    print(f"Loaded {total_rows} rows, {unique_endings} unique chains")
 
-        if not MIN_PASSWORD_LENGTH <= pwd_length <= MAX_PASSWORD_LENGTH:
-            raise ValueError(f"Password length must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH}")
+    crack_start = time.time()
+    password = crack_single_hash(target_hash, table, pwd_length, chain_length)
+    duration = time.time() - crack_start
 
-        if chain_length <= 0:
-            raise ValueError("Chain length must be greater than 0")
+    if password:
+        print(f"Password found: {password}")
+        print(f"Cracking time: {duration:.6f}s")
+    else:
+        print("Password not found")
+        print(f"Cracking time: {duration:.6f}s")
 
-        # Load table
-        table, total_rows, unique_endings = load_rainbow_table(rainbow_table_file)
-        print(f"Loaded {total_rows} rows, {unique_endings} unique chains")
-
-        print(f"Attempting to crack hash: {target_hash.hex()}")
-        crack_start = time.time()
-
-        password = crack_single_hash(target_hash, table, pwd_length, chain_length)
-        duration = time.time() - crack_start
-
-        if password:
-            print(f"Password found: {password}")
-            print(f"Cracking time: {duration:.6f}s")
-        else:
-            print("Password not found")
-            print(f"Cracking time: {duration:.6f}s")
-
-        return password
-
-    except Exception as e:
-        raise
+    return password
 
 def crack_hashes_from_file(
     hash_file: str,
@@ -177,61 +132,52 @@ def crack_hashes_from_file(
         
     Returns:
         Tuple (number of cracked passwords, total number of hashes)
-        
-    Raises:
-        ValueError: If parameters are invalid
-        FileNotFoundError: If table file doesn't exist
-        Exception: For other processing errors
     """
-    try:
-        # Load hashes
-        with open(hash_file, 'r') as f:
-            hashes = [line.strip() for line in f if line.strip()]
+    # Load hashes
+    with open(hash_file, 'r') as f:
+        hashes = [line.strip() for line in f if line.strip()]
 
-        if not hashes:
-            raise ValueError("Hash file is empty")
+    if not hashes:
+        raise ValueError("Hash file is empty")
 
-        # Validate hashes
-        target_hashes = []
-        for hash_str in hashes:
-            try:
-                hash_bytes = bytes.fromhex(hash_str)
-                if len(hash_bytes) != DES_BLOCK_SIZE:
-                    print(f"Warning: Skipping invalid hash length: {hash_str}")
-                    continue
-                target_hashes.append(hash_bytes)
-            except ValueError:
-                print(f"Warning: Skipping invalid hex hash: {hash_str}")
+    # Validate hashes
+    target_hashes = []
+    for hash_str in hashes:
+        try:
+            hash_bytes = bytes.fromhex(hash_str)
+            if len(hash_bytes) != DES_BLOCK_SIZE:
+                print(f"Warning: Skipping invalid hash length: {hash_str}")
+                continue
+            target_hashes.append(hash_bytes)
+        except ValueError:
+            print(f"Warning: Skipping invalid hex hash: {hash_str}")
 
-        if not target_hashes:
-            raise ValueError("No valid hashes found in file")
+    if not target_hashes:
+        raise ValueError("No valid hashes found in file")
 
-        # Load table once
-        table, total_rows, unique_endings = load_rainbow_table(rainbow_table_file)
-        print(f"Loaded {total_rows} rows, {unique_endings} unique chains")
-        print(f"Attempting to crack {len(target_hashes)} hashes...")
+    # Load table once
+    table, total_rows, unique_endings = load_rainbow_table(rainbow_table_file)
+    print(f"Loaded {total_rows} rows, {unique_endings} unique chains")
+    print(f"Attempting to crack {len(target_hashes)} hashes...")
 
-        # Crack hashes
-        cracked = 0
-        start_time = time.time()
+    # Crack hashes
+    cracked = 0
+    start_time = time.time()
 
-        for i, target_hash in enumerate(target_hashes, 1):
-            print(f"\nHash {i}/{len(target_hashes)}: {target_hash.hex()}")
-            password = crack_single_hash(target_hash, table, pwd_length, chain_length)
-            
-            if password:
-                print(f"Password found: {password}")
-                cracked += 1
-            else:
-                print("Password not found")
+    for i, target_hash in enumerate(target_hashes, 1):
+        print(f"\nHash {i}/{len(target_hashes)}: {target_hash.hex()}")
+        password = crack_single_hash(target_hash, table, pwd_length, chain_length)
+        
+        if password:
+            print(f"Password found: {password}")
+            cracked += 1
+        else:
+            print("Password not found")
 
-        duration = time.time() - start_time
-        success_rate = (cracked / len(target_hashes)) * 100
+    duration = time.time() - start_time
+    success_rate = (cracked / len(target_hashes)) * 100
 
-        print(f"\nCracking completed in {duration:.2f}s")
-        print(f"Cracked {cracked}/{len(target_hashes)} passwords ({success_rate:.1f}%)")
+    print(f"\nCracking completed in {duration:.2f}s")
+    print(f"Cracked {cracked}/{len(target_hashes)} passwords ({success_rate:.1f}%)")
 
-        return cracked, len(target_hashes)
-
-    except Exception as e:
-        raise
+    return cracked, len(target_hashes)

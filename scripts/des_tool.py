@@ -226,27 +226,12 @@ def crack_command(args):
             print(f"Attempting to crack hash: {args.hash}")
             print(f"Using rainbow table: {table_path}")
 
-            start_time = time.time()
             password = crack_hash(
                 target_hash=target_hash,
                 rainbow_table_file=table_path,
                 pwd_length=args.length,
                 chain_length=args.chain_length
             )
-            crack_duration = time.time() - start_time
-
-            if password:
-                print(f"Password found: {password}")
-                verify_start = time.time()
-                if des_hash(password) == target_hash:
-                    verify_duration = time.time() - verify_start
-                    print(f"Password verification successful (time: {verify_duration:.2f}s)")
-                else:
-                    verify_duration = time.time() - verify_start
-                    print(f"Error: Password verification failed! (time: {verify_duration:.2f}s)")
-            else:
-                print("Password not found")
-                print(f"Cracking time: {crack_duration:.2f}s")
 
         else:
             # Multiple hashes from file

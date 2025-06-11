@@ -17,7 +17,6 @@ from .config import (
     DES_BLOCK_SIZE,
     MIN_PASSWORD_LENGTH,
     MAX_PASSWORD_LENGTH,
-    MAX_FILE_SIZE,
     Password,
     Hash,
     Chain,
@@ -48,6 +47,5 @@ __all__ = [
     'DES_KEY',
     'DES_BLOCK_SIZE',
     'MIN_PASSWORD_LENGTH',
-    'MAX_PASSWORD_LENGTH',
-    'MAX_FILE_SIZE'
+    'MAX_PASSWORD_LENGTH'
 ]
