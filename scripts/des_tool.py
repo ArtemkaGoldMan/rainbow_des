@@ -1,20 +1,21 @@
 # rainbow_des/scripts/des_tool.py
 
 """
-Narzędzie wiersza poleceń do generowania tablic tęczowych i łamania hasł DES.
+Command line tool for generating rainbow tables and cracking DES passwords.
 """
 
 import argparse
 import sys
 import os
-import logging
 from pathlib import Path
 import random
 import time
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add project root to Python path
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, PROJECT_ROOT)
 
-from rainbow.crack_hash import crack_hash
+from rainbow.crack_hash import crack_hash, crack_hashes_from_file
 from rainbow.generator_chain import des_hash
 from rainbow.table_builder import generate_table
 from rainbow.utils import generate_random_passwords, save_table_to_csv, validate_password_length
@@ -24,132 +25,119 @@ from rainbow.config import (
     DES_BLOCK_SIZE,
     DEFAULT_BATCH_SIZE,
     DEFAULT_CHAIN_LENGTH,
-    DEFAULT_NUM_CHAINS,
-    LOG_FORMAT,
-    LOG_LEVEL,
-    LOG_FILE,
-    MAX_LOG_SIZE,
-    MAX_LOG_FILES
+    DEFAULT_NUM_CHAINS
 )
 
-# Konfiguracja logowania z rotacją
-handler = logging.handlers.RotatingFileHandler(
-    LOG_FILE,
-    maxBytes=MAX_LOG_SIZE,
-    backupCount=MAX_LOG_FILES
-)
-handler.setFormatter(logging.Formatter(LOG_FORMAT))
-
-logger = logging.getLogger(__name__)
-logger.setLevel(LOG_LEVEL)
-logger.addHandler(handler)
-
+def resolve_path(path: str) -> str:
+    """
+    Resolves a path relative to the project root.
+    If the path is absolute, returns it as is.
+    """
+    if os.path.isabs(path):
+        return path
+    return os.path.join(PROJECT_ROOT, path)
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="System do generowania tablic tęczowych i łamania hasł DES.",
+        description="System for generating rainbow tables and cracking DES passwords.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    subparsers = parser.add_subparsers(dest='command', help='Dostępne komendy')
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     # hash
-    hash_parser = subparsers.add_parser('hash', help='Generuje hash z hasła')
-    hash_parser.add_argument("--password", "-p", type=str, required=True, help="Hasło do zahashowania")
-    hash_parser.add_argument("--length", "-l", type=int, default=3, help="Długość hasła (domyślnie 3)")
+    hash_parser = subparsers.add_parser('hash', help='Generate hash from password')
+    hash_parser.add_argument("--password", "-p", type=str, required=True, help="Password to hash")
+    hash_parser.add_argument("--length", "-l", type=int, default=3, help="Password length (default: 3)")
 
     # generate
-    generate_parser = subparsers.add_parser('generate', help='Generuje tablicę tęczową')
+    generate_parser = subparsers.add_parser('generate', help='Generate rainbow table')
     generate_parser.add_argument("--chains", "-n", type=int, required=True, 
-                               help=f"Liczba łańcuchów (domyślnie: {DEFAULT_NUM_CHAINS})")
-    generate_parser.add_argument("--length", "-l", type=int, required=True, help="Długość hasła")
+                               help=f"Number of chains (default: {DEFAULT_NUM_CHAINS})")
+    generate_parser.add_argument("--length", "-l", type=int, required=True, help="Password length")
     generate_parser.add_argument("--chain-length", "-c", type=int, required=True,
-                               help=f"Długość łańcucha (domyślnie: {DEFAULT_CHAIN_LENGTH})")
-    generate_parser.add_argument("--procs", "-p", type=int, default=os.cpu_count(), help="Liczba procesów")
+                               help=f"Chain length (default: {DEFAULT_CHAIN_LENGTH})")
+    generate_parser.add_argument("--procs", "-p", type=int, default=os.cpu_count(), help="Number of processes")
     generate_parser.add_argument("--batch-size", "-b", type=int, default=DEFAULT_BATCH_SIZE, 
-                               help=f"Rozmiar wsadu (domyślnie: {DEFAULT_BATCH_SIZE})")
-    generate_parser.add_argument("--seed", type=int, help="Ziarno dla generatora liczb losowych")
-    generate_parser.add_argument("--output", "-o", type=str, required=True, help="Plik wynikowy CSV")
+                               help=f"Batch size (default: {DEFAULT_BATCH_SIZE})")
+    generate_parser.add_argument("--seed", type=int, help="Random number generator seed")
+    generate_parser.add_argument("--output", "-o", type=str, required=True, help="Output CSV file")
 
     # crack
-    crack_parser = subparsers.add_parser('crack', help='Próbuje złamać hash')
-    crack_parser.add_argument("--hash", "-H", type=str, required=True, help="Hash do złamania (hex)")
-    crack_parser.add_argument("--table", "-t", type=str, required=True, help="Plik z tablicą tęczową")
-    crack_parser.add_argument("--length", "-l", type=int, required=True, help="Długość hasła")
-    crack_parser.add_argument("--chain-length", "-c", type=int, required=True, help="Długość łańcucha")
+    crack_parser = subparsers.add_parser('crack', help='Attempt to crack hash')
+    crack_parser.add_argument("--hash", "-H", type=str, help="Hash to crack (hex)")
+    crack_parser.add_argument("--hash-file", "-f", type=str, help="File containing hashes to crack (one per line)")
+    crack_parser.add_argument("--table", "-t", type=str, required=True, help="Rainbow table file")
+    crack_parser.add_argument("--length", "-l", type=int, required=True, help="Password length")
+    crack_parser.add_argument("--chain-length", "-c", type=int, required=True, help="Chain length")
 
     return parser.parse_args()
 
 
 def hash_command(args):
-    """Obsługa komendy hash"""
+    """Handle hash command"""
     try:
         if not validate_password_length(args.password, args.length):
-            logger.error(f"Hasło musi mieć dokładnie {args.length} znaków i zawierać tylko małe litery i cyfry")
+            print(f"Error: Password must be exactly {args.length} characters and contain only lowercase letters and digits")
             sys.exit(1)
 
         hash_bytes = des_hash(args.password)
         print(f"Hash: {hash_bytes.hex()}")
-        print("\nUżyj tego hasha z komendą crack:")
-        print(f"python scripts/des_tool.py crack --hash {hash_bytes.hex()} --table <twoja_tablica.csv> --length {args.length} --chain-length <długość_łańcucha>")
+        print("\nUse this hash with the crack command:")
+        print(f"python scripts/des_tool.py crack --hash {hash_bytes.hex()} --table <your_table.csv> --length {args.length} --chain-length <chain_length>")
     except Exception as e:
-        logger.exception(f"Błąd podczas generowania hasha: {e}")
+        print(f"Error while generating hash: {e}")
         sys.exit(1)
 
 
 def generate_command(args):
-    """Obsługa komendy generate"""
+    """Handle generate command"""
     try:
-        # Walidacja parametrów
+        # Parameter validation
         if args.length < MIN_PASSWORD_LENGTH or args.length > MAX_PASSWORD_LENGTH:
-            print(f"Błąd: Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
-            logger.error(f"Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
+            print(f"Error: Password length must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH}")
             sys.exit(1)
             
         if args.chains <= 0:
-            print("Błąd: Liczba łańcuchów musi być większa od 0")
-            logger.error("Liczba łańcuchów musi być większa od 0")
+            print("Error: Number of chains must be greater than 0")
             sys.exit(1)
             
         if args.chain_length <= 0:
-            print("Błąd: Długość łańcucha musi być większa od 0")
-            logger.error("Długość łańcucha musi być większa od 0")
+            print("Error: Chain length must be greater than 0")
             sys.exit(1)
             
         if args.procs <= 0:
-            print("Błąd: Liczba procesów musi być większa od 0")
-            logger.error("Liczba procesów musi być większa od 0")
+            print("Error: Number of processes must be greater than 0")
             sys.exit(1)
             
         if args.batch_size <= 0:
-            print("Błąd: Rozmiar wsadu musi być większy od 0")
-            logger.error("Rozmiar wsadu musi być większy od 0")
+            print("Error: Batch size must be greater than 0")
             sys.exit(1)
 
-        print("\nRozpoczynam generowanie tablicy tęczowej:")
-        print(f"- Liczba łańcuchów: {args.chains}")
-        print(f"- Długość hasła: {args.length}")
-        print(f"- Długość łańcucha: {args.chain_length}")
-        print(f"- Liczba procesów: {args.procs}")
-        print(f"- Rozmiar wsadu: {args.batch_size}")
-        if args.seed is not None:
-            print(f"- Ziarno: {args.seed}")
-        print(f"- Plik wyjściowy: {args.output}")
-        print("\nGenerowanie losowych haseł...")
+        # Resolve output path
+        output_path = resolve_path(args.output)
 
-        # Generowanie losowych haseł
-        logger.info("Generowanie losowych haseł...")
+        print("\nStarting rainbow table generation:")
+        print(f"- Number of chains: {args.chains}")
+        print(f"- Password length: {args.length}")
+        print(f"- Chain length: {args.chain_length}")
+        print(f"- Number of processes: {args.procs}")
+        print(f"- Batch size: {args.batch_size}")
+        if args.seed is not None:
+            print(f"- Seed: {args.seed}")
+        print(f"- Output file: {output_path}")
+        print("\nGenerating random passwords...")
+
+        # Generate random passwords
         passwords, pwd_gen_time = generate_random_passwords(
             args.chains,
             args.length,
             args.seed
         )
-        print(f"Wygenerowano {len(passwords)} haseł w {pwd_gen_time:.6f}s")
-        logger.info(f"Wygenerowano {len(passwords)} haseł w {pwd_gen_time:.6f}s")
+        print(f"Generated {len(passwords)} passwords in {pwd_gen_time:.6f}s")
         
-        # Generowanie tablicy tęczowej
-        print("\nGenerowanie tablicy tęczowej...")
-        logger.info("Generowanie tablicy tęczowej...")
+        # Generate rainbow table
+        print("\nGenerating rainbow table...")
         table, table_gen_time = generate_table(
             passwords,
             args.length,
@@ -158,113 +146,132 @@ def generate_command(args):
             args.seed,
             args.batch_size
         )
-        print(f"Wygenerowano tablicę tęczową w {table_gen_time:.6f}s")
-        logger.info(f"Wygenerowano tablicę tęczową w {table_gen_time:.6f}s")
+        print(f"Generated rainbow table in {table_gen_time:.6f}s")
         
-        # Obliczanie statystyk unikalności
+        # Calculate uniqueness statistics
         total_chains = len(table)
         unique_chains = len(set(end_pwd for _, end_pwd in table))
         unique_percentage = (unique_chains / total_chains) * 100
         
+        # Save to file
+        print(f"\nSaving table to file {output_path}...")
+        save_time = save_table_to_csv(table, output_path)
+        print(f"Saved table in {save_time:.6f}s")
         
-        # Zapisywanie do pliku
-        print(f"\nZapisywanie tablicy do pliku {args.output}...")
-        logger.info(f"Zapisywanie tablicy do pliku {args.output}...")
-        save_time = save_table_to_csv(table, args.output)
-        print(f"Zapisano tablicę w {save_time:.6f}s")
-        logger.info(f"Zapisano tablicę w {save_time:.6f}s")
-        
-        # Wyświetlanie podsumowania
-        print("\nPodsumowanie:")
-        print(f"- Całkowita liczba łańcuchów: {total_chains}")
-        print(f"- Unikalnych łańcuchów: {unique_chains}")
-        print(f"- Procent unikalności: {unique_percentage:.2f}%")
-        print(f"- Długość hasła: {args.length}")
-        print(f"- Długość łańcucha: {args.chain_length}")
-        print(f"- Liczba procesów: {args.procs}")
-        print(f"- Rozmiar wsadu: {args.batch_size}")
-        print(f"- Czas generowania haseł: {pwd_gen_time:.6f}s")
-        print(f"- Czas generowania tablicy: {table_gen_time:.6f}s")
-        print(f"- Czas zapisu: {save_time:.6f}s")
-        print(f"- Całkowity czas: {pwd_gen_time + table_gen_time + save_time:.6f}s")
+        # Display summary
+        print("\nSummary:")
+        print(f"- Total number of chains: {total_chains}")
+        print(f"- Unique chains: {unique_chains}")
+        print(f"- Uniqueness percentage: {unique_percentage:.2f}%")
+        print(f"- Password length: {args.length}")
+        print(f"- Chain length: {args.chain_length}")
+        print(f"- Number of processes: {args.procs}")
+        print(f"- Batch size: {args.batch_size}")
+        print(f"- Password generation time: {pwd_gen_time:.6f}s")
+        print(f"- Table generation time: {table_gen_time:.6f}s")
+        print(f"- Save time: {save_time:.6f}s")
+        print(f"- Total time: {pwd_gen_time + table_gen_time + save_time:.6f}s")
         
     except KeyboardInterrupt:
-        print("\nPrzerwano przez użytkownika")
-        logger.error("Przerwano przez użytkownika")
+        print("\nInterrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\nBłąd podczas generowania tablicy: {e}")
-        logger.exception(f"Błąd podczas generowania tablicy: {e}")
+        print(f"\nError while generating table: {e}")
         sys.exit(1)
 
 
 def crack_command(args):
-    """Obsługa komendy crack"""
+    """Handle crack command"""
     try:
-        # Walidacja formatu hasha
-        try:
-            target_hash = bytes.fromhex(args.hash)
-            if len(target_hash) != DES_BLOCK_SIZE:
-                raise ValueError(f"Hash musi mieć dokładnie {DES_BLOCK_SIZE} bajtów ({DES_BLOCK_SIZE * 2} znaków hex)")
-        except ValueError as e:
-            logger.error(f"Nieprawidłowy format hasha: {e}")
-            sys.exit(1)
-
-        # Walidacja pliku tablicy
-        table_path = Path(args.table)
-        if not table_path.exists():
-            logger.error(f"Plik z tablicą tęczową nie istnieje: {args.table}")
-            sys.exit(1)
-        if table_path.stat().st_size < 32:
-            logger.warning("Plik tablicy wygląda na bardzo mały – możliwe, że jest niekompletny")
-
-        # Walidacja parametrów
+        # Validate parameters
         if args.length < MIN_PASSWORD_LENGTH or args.length > MAX_PASSWORD_LENGTH:
-            logger.error(f"Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
+            print(f"Error: Password length must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH}")
             sys.exit(1)
             
         if args.chain_length <= 0:
-            logger.error("Długość łańcucha musi być większa od 0")
+            print("Error: Chain length must be greater than 0")
             sys.exit(1)
 
-        logger.info(f"Próba złamania hasha: {args.hash}")
-        logger.info(f"Używam tablicy tęczowej: {args.table}")
+        # Check if either hash or hash file is provided
+        if not args.hash and not args.hash_file:
+            print("Error: Either --hash or --hash-file must be provided")
+            sys.exit(1)
 
-        start_time = time.time()
-        password = crack_hash(
-            target_hash=target_hash,
-            rainbow_table_file=args.table,
-            pwd_length=args.length,
-            chain_length=args.chain_length
-        )
-        crack_duration = time.time() - start_time
+        if args.hash and args.hash_file:
+            print("Error: Cannot use both --hash and --hash-file")
+            sys.exit(1)
 
-        if password:
-            logger.info(f"Znaleziono hasło: {password}")
-            verify_start = time.time()
-            if des_hash(password) == target_hash:
-                verify_duration = time.time() - verify_start
-                logger.info(f"Weryfikacja hasła pomyślna (czas: {verify_duration:.2f}s)")
+        # Resolve paths
+        table_path = resolve_path(args.table)
+        if args.hash_file:
+            hash_file_path = resolve_path(args.hash_file)
+
+        # Validate table file
+        if not os.path.exists(table_path):
+            print(f"Error: Rainbow table file does not exist: {table_path}")
+            sys.exit(1)
+        if os.path.getsize(table_path) < 32:
+            print("Warning: Table file appears to be very small - it might be incomplete")
+
+        if args.hash:
+            # Single hash cracking
+            try:
+                target_hash = bytes.fromhex(args.hash)
+                if len(target_hash) != DES_BLOCK_SIZE:
+                    raise ValueError(f"Hash must be exactly {DES_BLOCK_SIZE} bytes ({DES_BLOCK_SIZE * 2} hex characters)")
+            except ValueError as e:
+                print(f"Error: Invalid hash format: {e}")
+                sys.exit(1)
+
+            print(f"Attempting to crack hash: {args.hash}")
+            print(f"Using rainbow table: {table_path}")
+
+            start_time = time.time()
+            password = crack_hash(
+                target_hash=target_hash,
+                rainbow_table_file=table_path,
+                pwd_length=args.length,
+                chain_length=args.chain_length
+            )
+            crack_duration = time.time() - start_time
+
+            if password:
+                print(f"Password found: {password}")
+                verify_start = time.time()
+                if des_hash(password) == target_hash:
+                    verify_duration = time.time() - verify_start
+                    print(f"Password verification successful (time: {verify_duration:.2f}s)")
+                else:
+                    verify_duration = time.time() - verify_start
+                    print(f"Error: Password verification failed! (time: {verify_duration:.2f}s)")
             else:
-                verify_duration = time.time() - verify_start
-                logger.error(f"Błąd weryfikacji hasła! (czas: {verify_duration:.2f}s)")
+                print("Password not found")
+                print(f"Cracking time: {crack_duration:.2f}s")
+
         else:
-            logger.error("Nie znaleziono hasła")
-            
-        logger.info(f"\n=== Statystyki łamania hasha ===")
-        logger.info(f"Całkowity czas: {crack_duration:.2f}s")
-        if password:
-            logger.info(f"Czas weryfikacji: {verify_duration:.2f}s")
-            
+            # Multiple hashes from file
+            try:
+                cracked, total = crack_hashes_from_file(
+                    hash_file=hash_file_path,
+                    rainbow_table_file=table_path,
+                    pwd_length=args.length,
+                    chain_length=args.chain_length
+                )
+            except Exception as e:
+                print(f"Error while cracking hashes from file: {e}")
+                sys.exit(1)
+
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+        sys.exit(1)
     except Exception as e:
-        logger.exception(f"Wystąpił błąd podczas łamania hasha: {e}")
+        print(f"\nError while cracking hash: {e}")
         sys.exit(1)
 
 
 def main():
-    """Główny punkt wejścia"""
     args = parse_args()
-
+    
     if args.command == 'hash':
         hash_command(args)
     elif args.command == 'generate':
@@ -272,9 +279,9 @@ def main():
     elif args.command == 'crack':
         crack_command(args)
     else:
-        logger.error("Nie wybrano komendy. Użyj --help.")
+        print("Error: No command specified")
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

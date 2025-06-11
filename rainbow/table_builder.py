@@ -1,12 +1,10 @@
 #rainbow_des/rainbow/table_builder.py
 
 """
-Moduł do równoległego generowania tablic tęczowych z ulepszoną obsługą błędów i zarządzaniem zasobami.
+Module for parallel generation of rainbow tables with improved error handling and resource management.
 """
 
 import multiprocessing
-import logging
-import logging.handlers
 import os
 import random
 import time
@@ -25,25 +23,8 @@ from .config import (
     MIN_PASSWORD_LENGTH,
     MAX_PASSWORD_LENGTH,
     Chain,
-    Table,
-    LOG_FORMAT,
-    LOG_LEVEL,
-    LOG_FILE,
-    MAX_LOG_SIZE,
-    MAX_LOG_FILES
+    Table
 )
-
-# Konfiguracja logowania z rotacją
-handler = logging.handlers.RotatingFileHandler(
-    LOG_FILE,
-    maxBytes=MAX_LOG_SIZE,
-    backupCount=MAX_LOG_FILES
-)
-handler.setFormatter(logging.Formatter(LOG_FORMAT))
-
-logger = logging.getLogger(__name__)
-logger.setLevel(LOG_LEVEL)
-logger.addHandler(handler)
 
 def validate_inputs(
     start_passwords: List[str],
@@ -53,66 +34,64 @@ def validate_inputs(
     batch_size: int
 ) -> None:
     """
-    Waliduje wszystkie parametry wejściowe dla generowania tablicy.
+    Validates all input parameters for table generation.
     
     Args:
-        start_passwords: Lista haseł startowych
-        pwd_length: Oczekiwana długość hasła
-        chain_length: Długość każdego łańcucha
-        num_procs: Liczba procesów do użycia
-        batch_size: Rozmiar wsadów przetwarzania
+        start_passwords: List of starting passwords
+        pwd_length: Expected password length
+        chain_length: Length of each chain
+        num_procs: Number of processes to use
+        batch_size: Processing batch size
         
     Raises:
-        ValueError: Jeśli którykolwiek parametr jest nieprawidłowy
+        ValueError: If any parameter is invalid
     """
     if not start_passwords:
-        raise ValueError("Lista haseł startowych jest pusta")
+        raise ValueError("List of starting passwords is empty")
     
     if not all(validate_password_length(pwd, pwd_length) for pwd in start_passwords):
-        raise ValueError("Niektóre hasła startowe mają nieprawidłową długość lub zawierają niedozwolone znaki")
+        raise ValueError("Some starting passwords have invalid length or contain disallowed characters")
     
     if pwd_length < MIN_PASSWORD_LENGTH or pwd_length > MAX_PASSWORD_LENGTH:
-        raise ValueError(f"Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
+        raise ValueError(f"Password length must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH}")
     
     if chain_length <= 0:
-        raise ValueError("Długość łańcucha musi być większa niż 0")
+        raise ValueError("Chain length must be greater than 0")
     
     if num_procs < MIN_PROCESSES or num_procs > MAX_PROCESSES:
-        raise ValueError(f"Liczba procesów musi być między {MIN_PROCESSES} a {MAX_PROCESSES}")
+        raise ValueError(f"Number of processes must be between {MIN_PROCESSES} and {MAX_PROCESSES}")
     
     if batch_size <= 0:
-        raise ValueError("Rozmiar wsadu musi być większy niż 0")
+        raise ValueError("Batch size must be greater than 0")
 
 def _worker_chain(args: Tuple[str, int, int, Optional[int]]) -> Chain:
     """
-    Funkcja robocza dla multiprocessing.Pool.
-    Generuje pojedynczy łańcuch tęczowy.
+    Worker function for multiprocessing.Pool.
+    Generates a single rainbow chain.
     
     Args:
-        args: Krotka zawierająca (hasło_startowe, długość_hasła, długość_łańcucha, ziarno)
+        args: Tuple containing (start_password, password_length, chain_length, seed)
         
     Returns:
-        Krotka (hasło_startowe, hasło_końcowe)
+        Tuple (start_password, end_password)
         
     Raises:
-        ValueError: Jeśli walidacja wejścia nie powiedzie się
-        Exception: Dla innych błędów przetwarzania
+        ValueError: If input validation fails
+        Exception: For other processing errors
     """
     start_pwd, pwd_length, chain_length, seed = args
     try:
-        # Inicjalizacja ziarna dla tego procesu
+        # Initialize seed for this process
         if seed is not None:
             random.seed(seed + os.getpid())
             
         if not validate_password_length(start_pwd, pwd_length):
-            raise ValueError(f"Nieprawidłowe hasło startowe: {start_pwd}")
+            raise ValueError(f"Invalid starting password: {start_pwd}")
             
         result = generate_chain(start_pwd, pwd_length, chain_length)
-        logger.debug(f"[worker] {start_pwd} → {result[1]}")
         return result
         
     except Exception as e:
-        logger.exception(f"Błąd podczas generowania łańcucha dla '{start_pwd}': {e}")
         raise
 
 def generate_table(
@@ -125,54 +104,45 @@ def generate_table(
     timeout: int = DEFAULT_TIMEOUT
 ) -> Tuple[Table, float]:
     """
-    Generuje tablicę tęczową równolegle z ulepszoną obsługą błędów i zarządzaniem zasobami.
+    Generates a rainbow table in parallel with improved error handling and resource management.
     
     Args:
-        start_passwords: Lista haseł startowych
-        pwd_length: Długość haseł
-        chain_length: Długość każdego łańcucha
-        num_procs: Liczba procesów do użycia
-        seed: Opcjonalne ziarno dla generatora liczb losowych
-        batch_size: Rozmiar wsadów przetwarzania
-        timeout: Maksymalny czas w sekundach dla przetwarzania
+        start_passwords: List of starting passwords
+        pwd_length: Password length
+        chain_length: Length of each chain
+        num_procs: Number of processes to use
+        seed: Optional seed for random number generator
+        batch_size: Processing batch size
+        timeout: Maximum time in seconds for processing
         
     Returns:
-        Krotka (iterator krotek (hasło_startowe, hasło_końcowe), czas trwania w sekundach)
+        Tuple (iterator of (start_password, end_password) tuples, duration in seconds)
         
     Raises:
-        ValueError: Jeśli walidacja wejścia nie powiedzie się
-        TimeoutError: Jeśli przetwarzanie zajmie zbyt dużo czasu
-        Exception: Dla innych błędów przetwarzania
+        ValueError: If input validation fails
+        TimeoutError: If processing takes too long
+        Exception: For other processing errors
     """
     start_time = time.time()
     results = []
     
     try:
-        # Walidacja wszystkich wejść
+        # Validate all inputs
         validate_inputs(start_passwords, pwd_length, chain_length, num_procs, batch_size)
         
-        logger.info(f"Rozpoczynam generowanie tablicy tęczowej:")
-        logger.info(f"- Liczba haseł: {len(start_passwords)}")
-        logger.info(f"- Długość hasła: {pwd_length}")
-        logger.info(f"- Długość łańcucha: {chain_length}")
-        logger.info(f"- Liczba procesów: {num_procs}")
-        logger.info(f"- Rozmiar wsadu: {batch_size}")
-        if seed is not None:
-            logger.info(f"- Używam ziarna: {seed}")
-            
         args = [(pwd, pwd_length, chain_length, seed) for pwd in start_passwords]
         
         with multiprocessing.Pool(processes=num_procs) as pool:
-            with tqdm(total=len(start_passwords), desc="Generowanie łańcuchów") as pbar:
+            with tqdm(total=len(start_passwords), desc="Generating chains") as pbar:
                 for i in range(0, len(args), batch_size):
-                    # Sprawdzenie limitu czasu
+                    # Check timeout limit
                     if time.time() - start_time > timeout:
-                        raise TimeoutError(f"Przekroczono limit czasu ({timeout} sekund)")
+                        raise TimeoutError(f"Timeout limit exceeded ({timeout} seconds)")
                         
                     batch_args = args[i:i + batch_size]
                     
                     try:
-                        # Przetwarzanie wsadu z limitem czasu
+                        # Process batch with timeout
                         batch_results = pool.map_async(_worker_chain, batch_args)
                         batch_results = batch_results.get(timeout=timeout - (time.time() - start_time))
                         
@@ -180,18 +150,14 @@ def generate_table(
                             results.append(result)
                             
                     except multiprocessing.TimeoutError:
-                        raise TimeoutError(f"Przekroczono limit czasu dla wsadu {i}-{i + batch_size}")
+                        raise TimeoutError(f"Timeout exceeded for batch {i}-{i + batch_size}")
                     except Exception as e:
-                        logger.error(f"Błąd w przetwarzaniu wsadu {i}-{i + batch_size}: {e}")
                         raise
                         
                     pbar.update(len(batch_args))
-                    logger.debug(f"Przetworzono {min(i + batch_size, len(start_passwords))}/{len(start_passwords)} łańcuchów")
                     
         duration = time.time() - start_time
-        logger.info(f"Zakończono generowanie tablicy tęczowej w {duration:.2f}s")
         return results, duration
         
     except Exception as e:
-        logger.exception(f"Nie udało się wygenerować tablicy: {e}")
         raise

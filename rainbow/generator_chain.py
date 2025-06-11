@@ -1,11 +1,9 @@
 # rainbow_des/rainbow/generator_chain.py
 
 """
-Moduł do generowania łańcuchów tęczowych i funkcji redukcji.
+Module for generating rainbow chains and reduction functions.
 """
 
-import logging
-import logging.handlers
 from typing import Tuple, List
 from Crypto.Cipher import DES
 from Crypto.Util.Padding import pad
@@ -21,47 +19,29 @@ from .config import (
     MAX_PASSWORD_LENGTH,
     Password,
     Hash,
-    Chain,
-    LOG_FORMAT,
-    LOG_LEVEL,
-    LOG_FILE,
-    MAX_LOG_SIZE,
-    MAX_LOG_FILES
+    Chain
 )
-
-# Konfiguracja logowania z rotacją
-handler = logging.handlers.RotatingFileHandler(
-    LOG_FILE,
-    maxBytes=MAX_LOG_SIZE,
-    backupCount=MAX_LOG_FILES
-)
-handler.setFormatter(logging.Formatter(LOG_FORMAT))
-
-logger = logging.getLogger(__name__)
-logger.setLevel(LOG_LEVEL)
-logger.addHandler(handler)
-
 
 def des_hash(password: Password) -> Hash:
     """
-    Generuje hash DES dla podanego hasła.
+    Generates DES hash for the given password.
 
     Args:
-        password: Hasło do zahashowania
+        password: Password to hash
 
     Returns:
-        Hash DES jako bajty
+        DES hash as bytes
 
     Raises:
-        ValueError: Jeśli hasło jest nieprawidłowe
-        Exception: Dla innych błędów przetwarzania
+        ValueError: If password is invalid
+        Exception: For other processing errors
     """
     try:
         if not isinstance(password, str):
-            raise TypeError("Hasło musi być ciągiem znaków")
+            raise TypeError("Password must be a string")
 
         if len(password) < MIN_PASSWORD_LENGTH or len(password) > MAX_PASSWORD_LENGTH:
-            raise ValueError(f"Długość hasła musi być między {MIN_PASSWORD_LENGTH} a {MAX_PASSWORD_LENGTH}")
+            raise ValueError(f"Password length must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH}")
 
         data_bytes = password.encode('utf-8')
         padded_data = pad(data_bytes, DES_BLOCK_SIZE)
@@ -71,35 +51,34 @@ def des_hash(password: Password) -> Hash:
         return encrypted_bytes[:DES_BLOCK_SIZE]
 
     except Exception as error:
-        logger.exception(f"Błąd podczas generowania hasha DES: {error}")
         raise
 
 
 def generate_chain(start_password: Password, password_length: int, chain_length: int) -> Chain:
     """
-    Generuje łańcuch tęczowy zaczynając od podanego hasła.
+    Generates a rainbow chain starting from the given password.
 
     Args:
-        start_password: Hasło startowe
-        password_length: Długość hasła
-        chain_length: Długość łańcucha
+        start_password: Starting password
+        password_length: Password length
+        chain_length: Chain length
 
     Returns:
-        Krotka (hasło_startowe, hasło_końcowe)
+        Tuple (start_password, end_password)
 
     Raises:
-        ValueError: Jeśli parametry są nieprawidłowe
-        Exception: Dla innych błędów przetwarzania
+        ValueError: If parameters are invalid
+        Exception: For other processing errors
     """
     try:
         if not isinstance(start_password, str):
-            raise TypeError("Hasło startowe musi być ciągiem znaków")
+            raise TypeError("Starting password must be a string")
 
         if len(start_password) != password_length:
-            raise ValueError(f"Hasło startowe musi mieć długość {password_length}")
+            raise ValueError(f"Starting password must have length {password_length}")
 
         if chain_length <= 0:
-            raise ValueError("Długość łańcucha musi być większa od 0")
+            raise ValueError("Chain length must be greater than 0")
 
         current_password = start_password
         seen_passwords = {current_password}
@@ -109,7 +88,7 @@ def generate_chain(start_password: Password, password_length: int, chain_length:
             reduced_password = reduce_hash(hashed_bytes, step_index, password_length)
 
             if reduced_password in seen_passwords:
-                # Jeśli pojawił się cykl, spróbuj inny wariант redukcji
+                # If a cycle is detected, try a different reduction variant
                 reduced_password = reduce_hash(hashed_bytes, (step_index + chain_length) % 256, password_length)
 
             seen_passwords.add(reduced_password)
@@ -118,5 +97,4 @@ def generate_chain(start_password: Password, password_length: int, chain_length:
         return start_password, current_password
 
     except Exception as error:
-        logger.exception(f"Błąd podczas generowania łańcucha tęczowego: {error}")
         raise
