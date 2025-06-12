@@ -15,7 +15,7 @@ import time
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from rainbow.crack_hash import crack_hash, crack_hashes_from_file
+from rainbow.crack_hash import crack_hash
 from rainbow.generator_chain import des_hash
 from rainbow.table_builder import generate_table
 from rainbow.utils import generate_random_passwords, save_table_to_csv, validate_password_length
@@ -181,76 +181,86 @@ def generate_command(args):
 
 
 def crack_command(args):
-    """Handle crack command"""
+    """Handle crack command (single hash or batch from file)"""
     try:
         # Validate parameters
         if args.length < MIN_PASSWORD_LENGTH or args.length > MAX_PASSWORD_LENGTH:
             print(f"Error: Password length must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH}")
             sys.exit(1)
-            
         if args.chain_length <= 0:
             print("Error: Chain length must be greater than 0")
             sys.exit(1)
-
-        # Check if either hash or hash file is provided
         if not args.hash and not args.hash_file:
             print("Error: Either --hash or --hash-file must be provided")
             sys.exit(1)
-
         if args.hash and args.hash_file:
             print("Error: Cannot use both --hash and --hash-file")
             sys.exit(1)
 
-        # Resolve paths
+        # Resolve table path
         table_path = resolve_path(args.table)
-        if args.hash_file:
-            hash_file_path = resolve_path(args.hash_file)
-
-        # Validate table file
         if not os.path.exists(table_path):
             print(f"Error: Rainbow table file does not exist: {table_path}")
             sys.exit(1)
         if os.path.getsize(table_path) < 32:
             print("Warning: Table file appears to be very small - it might be incomplete")
 
+        # Prepare list of hashes to crack
+        hashes = []
+
         if args.hash:
-            # Single hash cracking
             try:
-                target_hash = bytes.fromhex(args.hash)
-                if len(target_hash) != DES_BLOCK_SIZE:
-                    raise ValueError(f"Hash must be exactly {DES_BLOCK_SIZE} bytes ({DES_BLOCK_SIZE * 2} hex characters)")
+                h = bytes.fromhex(args.hash)
+                if len(h) != DES_BLOCK_SIZE:
+                    raise ValueError(f"Hash must be exactly {DES_BLOCK_SIZE} bytes")
+                hashes.append(h)
             except ValueError as e:
                 print(f"Error: Invalid hash format: {e}")
                 sys.exit(1)
+        else:
+            hash_file_path = resolve_path(args.hash_file)
+            with open(hash_file_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        h = bytes.fromhex(line)
+                        if len(h) != DES_BLOCK_SIZE:
+                            print(f"Skipping invalid length hash: {line}")
+                            continue
+                        hashes.append(h)
+                    except ValueError:
+                        print(f"Skipping invalid hex hash: {line}")
 
-            print(f"Attempting to crack hash: {args.hash}")
-            print(f"Using rainbow table: {table_path}")
+        if not hashes:
+            print("No valid hashes to crack.")
+            sys.exit(1)
 
+        print(f"\nLoaded {len(hashes)} hash(es). Using table: {table_path}")
+        cracked_count = 0
+        start_time = time.time()
+
+        for i, target_hash in enumerate(hashes, 1):
+            print(f"\n[{i}/{len(hashes)}] Cracking hash: {target_hash.hex()}")
             password = crack_hash(
                 target_hash=target_hash,
                 rainbow_table_file=table_path,
                 pwd_length=args.length,
                 chain_length=args.chain_length
             )
+            if password:
+                cracked_count += 1
 
-        else:
-            # Multiple hashes from file
-            try:
-                cracked, total = crack_hashes_from_file(
-                    hash_file=hash_file_path,
-                    rainbow_table_file=table_path,
-                    pwd_length=args.length,
-                    chain_length=args.chain_length
-                )
-            except Exception as e:
-                print(f"Error while cracking hashes from file: {e}")
-                sys.exit(1)
+        duration = time.time() - start_time
+        print(f"\nCracked {cracked_count}/{len(hashes)} hashes in {duration:.2f}s")
+        print(f"Success rate: {(cracked_count / len(hashes)) * 100:.2f}%")
 
     except KeyboardInterrupt:
         print("\nInterrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\nError while cracking hash: {e}")
+        print(f"\nError while cracking hashes: {e}")
         sys.exit(1)
 
 
