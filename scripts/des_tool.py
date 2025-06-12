@@ -15,7 +15,7 @@ import time
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from rainbow.crack_hash import crack_hash
+from rainbow.crack_hash import crack_single_hash, load_rainbow_table
 from rainbow.generator_chain import des_hash
 from rainbow.table_builder import generate_table
 from rainbow.utils import generate_random_passwords, save_table_to_csv, validate_password_length
@@ -197,7 +197,7 @@ def crack_command(args):
             print("Error: Cannot use both --hash and --hash-file")
             sys.exit(1)
 
-        # Resolve table path
+        # Resolve and validate table path
         table_path = resolve_path(args.table)
         if not os.path.exists(table_path):
             print(f"Error: Rainbow table file does not exist: {table_path}")
@@ -205,7 +205,12 @@ def crack_command(args):
         if os.path.getsize(table_path) < 32:
             print("Warning: Table file appears to be very small - it might be incomplete")
 
-        # Prepare list of hashes to crack
+        # Load table once
+        print(f"\nLoading rainbow table from: {table_path}")
+        table, total_rows, unique_endings = load_rainbow_table(table_path)
+        print(f"Loaded {total_rows} rows, {unique_endings} unique chains")
+
+        # Prepare list of hashes
         hashes = []
 
         if args.hash:
@@ -237,23 +242,26 @@ def crack_command(args):
             print("No valid hashes to crack.")
             sys.exit(1)
 
-        print(f"\nLoaded {len(hashes)} hash(es). Using table: {table_path}")
+        print(f"\nStarting to crack {len(hashes)} hash(es)...")
         cracked_count = 0
         start_time = time.time()
 
         for i, target_hash in enumerate(hashes, 1):
             print(f"\n[{i}/{len(hashes)}] Cracking hash: {target_hash.hex()}")
-            password = crack_hash(
+            password = crack_single_hash(
                 target_hash=target_hash,
-                rainbow_table_file=table_path,
+                table=table,
                 pwd_length=args.length,
                 chain_length=args.chain_length
             )
             if password:
                 cracked_count += 1
+                print(f"Password found: {password}")
+            else:
+                print("Password not found.")
 
         duration = time.time() - start_time
-        print(f"\nCracked {cracked_count}/{len(hashes)} hashes in {duration:.2f}s")
+        print(f"\nCracked {cracked_count}/{len(hashes)} hashes in {duration:.6f}s")
         print(f"Success rate: {(cracked_count / len(hashes)) * 100:.2f}%")
 
     except KeyboardInterrupt:
